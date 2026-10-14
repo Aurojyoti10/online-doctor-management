@@ -1,5 +1,5 @@
-const express = require('express');
 
+const express = require('express');
 const router = express.Router();
 
 const {
@@ -10,16 +10,33 @@ const {
   deleteAppointment
 } = require('../controllers/appointmentController');
 
+const {
+  authenticateToken,
+  authorizeRoles
+} = require('../middleware/authMiddleware');
 
-router.get('/', getAllAppointments);
+router.get('/', authenticateToken, getAllAppointments);
+router.get('/:id', authenticateToken, getAppointmentById);
 
-router.get('/:id', getAppointmentById);
+router.post(
+  '/',
+  authenticateToken,
+  authorizeRoles('doctor', 'admin'),
+  createAppointment
+);
 
-router.post('/', createAppointment);
+router.put(
+  '/:id',
+  authenticateToken,
+  authorizeRoles('doctor', 'admin'),
+  updateAppointment
+);
 
-router.put('/:id', updateAppointment);
-
-router.delete('/:id', deleteAppointment);
-
+router.delete(
+  '/:id',
+  authenticateToken,
+  authorizeRoles('admin'),
+  deleteAppointment
+);
 
 module.exports = router;
