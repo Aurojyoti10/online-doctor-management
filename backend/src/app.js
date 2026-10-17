@@ -8,6 +8,7 @@ const doctorRoutes = require('./routes/doctorRoutes');
 const patientRoutes = require('./routes/patientRoutes');
 const appointmentRoutes = require('./routes/appointmentRoutes');
 const authRoutes = require('./routes/authRoutes');
+const prescriptionRoutes = require('./routes/prescriptionRoutes');
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.use('/api/doctors', doctorRoutes);
 app.use('/api/patients', patientRoutes);
 app.use('/api/appointments', appointmentRoutes);
 app.use('/api/auth', authRoutes);
+app.use('/api/prescriptions', prescriptionRoutes);
   
 app.get('/api/health', (req, res) => {
   res.status(200).json({
