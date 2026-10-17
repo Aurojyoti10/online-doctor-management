@@ -267,7 +267,22 @@ const updateAppointment = async (req, res) => {
         message: 'Appointment not found'
       });
     }
+    if (req.user.role === 'doctor') {
+  const [doctor] = await pool.query(
+    'SELECT id FROM doctors WHERE user_id = ?',
+    [req.user.id]
+  );
 
+  if (
+    doctor.length === 0 ||
+    doctor[0].id !== current[0].doctor_id
+  ) {
+    return res.status(403).json({
+      success: false,
+      message: 'You can only update your own appointments'
+    });
+  }
+}
     if (['scheduled', 'confirmed'].includes(status)) {
       const [conflicts] = await pool.query(
         `SELECT id FROM appointments
