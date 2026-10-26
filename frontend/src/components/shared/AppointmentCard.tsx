@@ -41,24 +41,30 @@ export function AppointmentCard({ appointment, onView, onReschedule, onCancel, o
           {appointment.reason && <p className="text-xs text-navy-500 mt-1.5 line-clamp-1">Reason: {appointment.reason}</p>}
         </div>
       </div>
-      {showActions && (
-        <div className="flex gap-2 mt-3 pt-3 border-t border-navy-50">
-          {appointment.status === 'confirmed' || appointment.status === 'pending' ? (
-            <>
-              <Button variant="outline" size="sm" className="flex-1" onClick={onView}>View Details</Button>
-              <Button variant="ghost" size="sm" className="text-error-600 hover:bg-error-50" onClick={onCancel}>Cancel</Button>
-            </>
-          ) : appointment.status === 'completed' ? (
-            <>
-              <Button variant="outline" size="sm" className="flex-1" onClick={onView}>View Details</Button>
-              {appointment.prescriptionId && <Button variant="outline" size="sm" className="flex-1" onClick={onView}>Prescription</Button>}
-              <Button size="sm" className="flex-1" onClick={onRate}>Rate</Button>
-            </>
-          ) : (
-            <Button variant="outline" size="sm" className="flex-1" onClick={onView}>View Details</Button>
-          )}
-        </div>
-      )}
-    </Card>
-  );
+      
+{showActions && (
+  <div className="flex gap-2 mt-3 pt-3 border-t border-navy-50">
+    {appointment.status === 'confirmed' ||
+    appointment.status === 'pending' ? (
+      <Button
+        variant="ghost"
+        size="sm"
+        className="text-error-600 hover:bg-error-50"
+        onClick={onCancel}
+      >
+        Cancel
+      </Button>
+    ) : appointment.status === 'completed' ? (
+      <Button
+        size="sm"
+        className="flex-1"
+        onClick={onRate}
+      >
+        Rate
+      </Button>
+    ) : null}
+  </div>
+)}
+</Card>
+);
 }
