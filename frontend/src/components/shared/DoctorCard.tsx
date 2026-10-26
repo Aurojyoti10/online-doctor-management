@@ -171,24 +171,16 @@ export function DoctorCard({
         </div>
       )}
 
-      <div className="flex gap-2 mt-4">
-        <Button
-          variant="outline"
-          size="sm"
-          className="flex-1"
-          onClick={() => onView?.(doctor)}
-        >
-          View Profile
-        </Button>
-
-        <Button
-          size="sm"
-          className="flex-1"
-          onClick={() => onBook?.(doctor)}
-        >
-          Book Appointment
-        </Button>
-      </div>
-    </Card>
-  );
+      
+<div className="mt-4">
+  <Button
+    size="sm"
+    className="w-full"
+    onClick={() => onBook?.(doctor)}
+  >
+    Book Appointment
+  </Button>
+</div>
+</Card>
+);
 }
