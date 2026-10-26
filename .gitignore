@@ -1,2 +1,13 @@
 .env
 node_modules/
+# Temporary scripts and exported files
+add-availability.js
+patch-booking-page.cjs
+careconnect-doctor-pages.zip
+patient-portal-code.txt
+
+# Backup files
+*.backup
+*.bak
+*.before-cleanup.bak
+*.before-api.bak
