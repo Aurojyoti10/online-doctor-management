@@ -1,5 +1,6 @@
-const express = require('express');
 
+
+const express = require('express');
 const router = express.Router();
 
 const {
@@ -7,17 +8,28 @@ const {
   getPatientById,
   createPatient,
   updatePatient,
-  deletePatient 
+  deletePatient,
+  getMyProfile,
+  updateMyProfile,
 } = require('../controllers/patientController');
 
-router.get('/', getAllPatients);
+const {
+  authenticateToken,
+  authorizeRoles,
+} = require('../middleware/authMiddleware');
 
-router.get('/:id', getPatientById);
+// All patient endpoints require authentication.
+router.use(authenticateToken);
 
-router.post('/', createPatient);
+// Patient self-service profile endpoints.
+router.get('/me', authorizeRoles('patient'), getMyProfile);
+router.put('/me', authorizeRoles('patient'), updateMyProfile);
 
-router.put('/:id', updatePatient);
-
-router.delete('/:id', deletePatient);
+// Admin-only patient management.
+router.get('/', authorizeRoles('admin'), getAllPatients);
+router.get('/:id', authorizeRoles('admin'), getPatientById);
+router.post('/', authorizeRoles('admin'), createPatient);
+router.put('/:id', authorizeRoles('admin'), updatePatient);
+router.delete('/:id', authorizeRoles('admin'), deletePatient);
 
 module.exports = router;

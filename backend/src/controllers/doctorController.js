@@ -3,16 +3,25 @@ const pool = require('../config/database');
 const getAllDoctors = async (req, res) => {
   try {
     const [doctors] = await pool.query(`
-      SELECT
-        d.id,
-        d.user_id,
-        d.specialization,
-        d.qualification,
-        d.experience_years,
-        d.consultation_fee,
-        d.created_at,
-        d.updated_at
-      FROM doctors d
+
+SELECT
+  d.id,
+  d.user_id,
+  u.name,
+  u.email,
+  d.specialization,
+  d.qualification,
+  d.experience_years,
+  d.consultation_fee,
+  d.city,
+d.hospital,
+d.about,
+d.languages,
+  d.created_at,
+  d.updated_at
+FROM doctors d
+JOIN users u ON d.user_id = u.id
+
     `);
 
     res.status(200).json({
@@ -37,17 +46,26 @@ const getDoctorById = async (req, res) => {
     const { id } = req.params;
 
     const [doctors] = await pool.query(`
-      SELECT
-        d.id,
-        d.user_id,
-        d.specialization,
-        d.qualification,
-        d.experience_years,
-        d.consultation_fee,
-        d.created_at,
-        d.updated_at
-      FROM doctors d
-      WHERE d.id = ?
+
+SELECT
+  d.id,
+  d.user_id,
+  u.name,
+  u.email,
+  d.specialization,
+  d.qualification,
+  d.experience_years,
+  d.consultation_fee,
+  d.city,
+d.hospital,
+d.about,
+d.languages,
+  d.created_at,
+  d.updated_at
+FROM doctors d
+JOIN users u ON d.user_id = u.id
+WHERE d.id = ?
+
     `, [id]);
 
     if (doctors.length === 0) {
@@ -73,57 +91,145 @@ const getDoctorById = async (req, res) => {
 };
 
 
+
+const bcrypt = require('bcryptjs');
+
 const createDoctor = async (req, res) => {
+  let connection;
+
   try {
     const {
-      user_id,
+      name,
+      email,
+      password,
       specialization,
       qualification,
-      experience_years,
-      consultation_fee
+      experience_years = 0,
+      consultation_fee = 0
     } = req.body;
 
-    if (!user_id || !specialization) {
+    if (
+      !name?.trim() ||
+      !email?.trim() ||
+      !password ||
+      !specialization?.trim()
+    ) {
       return res.status(400).json({
         success: false,
-        message: 'user_id and specialization are required'
+        message: 'Name, email, password and specialization are required'
       });
     }
 
-    const [result] = await pool.query(`
-      INSERT INTO doctors
-      (user_id, specialization, qualification, experience_years, consultation_fee)
-      VALUES (?, ?, ?, ?, ?)
-    `, [
-      user_id,
-      specialization,
-      qualification || null,
-      experience_years || 0,
-      consultation_fee || 0
-    ]);
+    if (password.length < 8) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password must contain at least 8 characters'
+      });
+    }
 
-    res.status(201).json({
+    const normalizedEmail = email.trim().toLowerCase();
+    const experience = Number(experience_years);
+    const fee = Number(consultation_fee);
+
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Enter a valid email address'
+      });
+    }
+
+    if (
+      !Number.isInteger(experience) ||
+      experience < 0 ||
+      !Number.isFinite(fee) ||
+      fee < 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'Experience and consultation fee must be valid non-negative numbers'
+      });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [existingUsers] = await connection.query(
+      'SELECT id FROM users WHERE email = ?',
+      [normalizedEmail]
+    );
+
+    if (existingUsers.length) {
+      await connection.rollback();
+
+      return res.status(409).json({
+        success: false,
+        message: 'This email address is already registered'
+      });
+    }
+
+    const hashedPassword = await bcrypt.hash(password, 12);
+
+    const [userResult] = await connection.query(
+      `INSERT INTO users (name, email, password, role)
+       VALUES (?, ?, ?, 'doctor')`,
+      [name.trim(), normalizedEmail, hashedPassword]
+    );
+
+    const userId = userResult.insertId;
+
+    const [doctorResult] = await connection.query(
+      `INSERT INTO doctors
+        (user_id, specialization, qualification,
+         experience_years, consultation_fee)
+       VALUES (?, ?, ?, ?, ?)`,
+      [
+        userId,
+        specialization.trim(),
+        qualification?.trim() || null,
+        experience,
+        fee
+      ]
+    );
+
+    await connection.commit();
+
+    return res.status(201).json({
       success: true,
-      message: 'Doctor created successfully',
+      message: 'Doctor account created successfully',
       data: {
-        id: result.insertId,
-        user_id,
-        specialization,
-        qualification: qualification || null,
-        experience_years: experience_years || 0,
-        consultation_fee: consultation_fee || 0
+        id: doctorResult.insertId,
+        user_id: userId,
+        name: name.trim(),
+        email: normalizedEmail,
+        specialization: specialization.trim(),
+        qualification: qualification?.trim() || null,
+        experience_years: experience,
+        consultation_fee: fee
       }
     });
-
   } catch (error) {
-    console.error('Error creating doctor:', error);
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
 
-    res.status(500).json({
+    if (error.code === 'ER_DUP_ENTRY') {
+      return res.status(409).json({
+        success: false,
+        message: 'This email address is already registered'
+      });
+    }
+
+    console.error('Create doctor error:', error);
+
+    return res.status(500).json({
       success: false,
-      message: 'Failed to create doctor'
+      message: 'Failed to create doctor account'
     });
+  } finally {
+    if (connection) connection.release();
   }
 };
+
 const updateDoctor = async (req, res) => {
   try {
     const { id } = req.params;

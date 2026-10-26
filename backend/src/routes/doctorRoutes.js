@@ -1,5 +1,6 @@
-const express = require('express');
 
+
+const express = require('express');
 const router = express.Router();
 
 const {
@@ -7,12 +8,38 @@ const {
   getDoctorById,
   createDoctor,
   updateDoctor,
-  deleteDoctor
+  deleteDoctor,
 } = require('../controllers/doctorController');
+
+const {
+  authenticateToken,
+  authorizeRoles,
+} = require('../middleware/authMiddleware');
+
+// Public doctor directory: patients must be able to find doctors.
 router.get('/', getAllDoctors);
 router.get('/:id', getDoctorById);
-router.put('/:id', updateDoctor);
-router.post('/', createDoctor);
-router.delete('/:id', deleteDoctor);
+
+// Only admins can create, modify, or delete doctor accounts.
+router.post(
+  '/',
+  authenticateToken,
+  authorizeRoles('admin'),
+  createDoctor
+);
+
+router.put(
+  '/:id',
+  authenticateToken,
+  authorizeRoles('admin'),
+  updateDoctor
+);
+
+router.delete(
+  '/:id',
+  authenticateToken,
+  authorizeRoles('admin'),
+  deleteDoctor
+);
 
 module.exports = router;

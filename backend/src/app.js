@@ -1,4 +1,3 @@
-require('dotenv').config();
 
 const cors = require('cors');
 const express = require('express');
@@ -10,6 +9,8 @@ const appointmentRoutes = require('./routes/appointmentRoutes');
 const authRoutes = require('./routes/authRoutes');
 const prescriptionRoutes = require('./routes/prescriptionRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const doctorPortalRoutes = require('./routes/doctorPortalRoutes');
 
 const app = express();
 
@@ -22,6 +23,8 @@ app.use('/api/appointments', appointmentRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/prescriptions', prescriptionRoutes);
 app.use('/api/payments', paymentRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/doctor-portal', doctorPortalRoutes);
   
 app.get('/api/health', (req, res) => {
   res.status(200).json({
