@@ -6,7 +6,6 @@ import {
   Eye,
   Edit2,
   Trash2,
-  Ban,
   Users,
   LayoutDashboard,
   Stethoscope,
@@ -387,19 +386,6 @@ export function AdminPatients() {
                           <Edit2 className="w-4 h-4" /> Edit
                         </button>
 
-                        <button
-                          onClick={() => {
-                            setOpenMenu(null);
-                            showToast(
-                              'info',
-                              'Suspension Not Configured',
-                              'The database needs a patient status field and corresponding backend logic before suspension can be saved.',
-                            );
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
-                        >
-                          <Ban className="w-4 h-4" /> Suspend
-                        </button>
 
                         <button
                           onClick={() => {

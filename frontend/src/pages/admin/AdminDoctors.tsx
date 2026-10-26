@@ -7,7 +7,6 @@ import {
   Eye,
   Edit2,
   Trash2,
-  UserX,
   Plus,
   LayoutDashboard,
   Stethoscope,
@@ -469,20 +468,6 @@ export function AdminDoctors() {
                           Edit
                         </button>
 
-                        <button
-                          onClick={() => {
-                            setOpenMenu(null);
-                            showToast(
-                              'info',
-                              'Status Not Configured',
-                              'Doctor activation requires a status field and backend endpoint.',
-                            );
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
-                        >
-                          <UserX className="h-4 w-4" />
-                          Deactivate
-                        </button>
 
                         <button
                           onClick={() => {
