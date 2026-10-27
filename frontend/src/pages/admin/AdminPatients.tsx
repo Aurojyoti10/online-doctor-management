@@ -1,5 +1,6 @@
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search,
   MoreVertical,
@@ -144,7 +145,8 @@ export function AdminPatients() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<PatientRecord | null>(null);
+const [deleteTarget, setDeleteTarget] = useState<PatientRecord | null>(null);
+const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [viewingPatient, setViewingPatient] = useState<PatientRecord | null>(null);
   const [editingPatient, setEditingPatient] = useState<PatientRecord | null>(null);
   const [saving, setSaving] = useState(false);
@@ -318,7 +320,7 @@ export function AdminPatients() {
             </thead>
 
             <tbody>
-              {filtered.map((patient) => (
+              {filtered.map((patient,index) => (
                 <tr
                   key={patient.id}
                   className="border-b border-navy-50 hover:bg-navy-50/50"
@@ -355,49 +357,98 @@ export function AdminPatients() {
 
                   <td className="px-4 py-3 text-right relative">
                     <button
-                      onClick={() =>
-                        setOpenMenu(
-                          openMenu === String(patient.id)
-                            ? null
-                            : String(patient.id),
-                        )
-                      }
-                      className="p-1.5 text-navy-400 hover:text-navy-700 hover:bg-navy-100 rounded-lg"
-                    >
-                      <MoreVertical className="w-4 h-4" />
-                    </button>
+  onClick={(event) => {
+    const patientId = String(patient.id);
 
-                    {openMenu === String(patient.id) && (
-                      <div className="absolute right-4 top-full mt-1 w-40 bg-white rounded-xl shadow-elevated border border-navy-100 py-1 z-10 text-left">
-                        <button
-                          onClick={() => {
-                            setViewingPatient(patient);
-                            setOpenMenu(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
-                        >
-                          <Eye className="w-4 h-4" /> View
-                        </button>
+    if (openMenu === patientId) {
+      setOpenMenu(null);
+      return;
+    }
 
-                        <button
-                          onClick={() => openEdit(patient)}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
-                        >
-                          <Edit2 className="w-4 h-4" /> Edit
-                        </button>
+    const rect = event.currentTarget.getBoundingClientRect();
 
+    const menuHeight = 132;
+    const menuWidth = 160;
+    const gap = 4;
 
-                        <button
-                          onClick={() => {
-                            setDeleteTarget(patient);
-                            setOpenMenu(null);
-                          }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error-600 hover:bg-error-50"
-                        >
-                          <Trash2 className="w-4 h-4" /> Delete
-                        </button>
-                      </div>
-                    )}
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < menuHeight + gap;
+
+    const top = openUp
+      ? Math.max(8, rect.top - menuHeight - gap)
+      : Math.min(
+          window.innerHeight - menuHeight - 8,
+          rect.bottom + gap
+        );
+
+    const left = Math.max(
+      8,
+      Math.min(
+        rect.right - menuWidth,
+        window.innerWidth - menuWidth - 8
+      )
+    );
+
+    setMenuPosition({ top, left });
+    setOpenMenu(patientId);
+  }}
+  className="p-1.5 text-navy-400 hover:text-navy-700 hover:bg-navy-100 rounded-lg"
+  aria-label={`Actions for ${patient.name}`}
+>
+  <MoreVertical className="w-4 h-4" />
+</button>
+
+                    {openMenu === String(patient.id) &&
+  createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-[999]"
+        onClick={() => setOpenMenu(null)}
+      />
+
+      <div
+        className="fixed w-40 bg-white rounded-xl shadow-elevated border border-navy-100 py-1 z-[1000] text-left"
+        style={{
+          top: menuPosition.top,
+          left: menuPosition.left,
+        }}
+      >
+        <button
+          onClick={() => {
+            setViewingPatient(patient);
+            setOpenMenu(null);
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
+        >
+          <Eye className="w-4 h-4" />
+          View
+        </button>
+
+        <button
+          onClick={() => {
+            setOpenMenu(null);
+            openEdit(patient);
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
+        >
+          <Edit2 className="w-4 h-4" />
+          Edit
+        </button>
+
+        <button
+          onClick={() => {
+            setDeleteTarget(patient);
+            setOpenMenu(null);
+          }}
+          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-error-600 hover:bg-error-50"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
+      </div>
+    </>,
+    document.body
+  )}
                   </td>
                 </tr>
               ))}

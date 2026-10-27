@@ -1,6 +1,7 @@
 
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Search,
   MoreVertical,
@@ -125,7 +126,10 @@ export function AdminDoctors() {
   const [search, setSearch] = useState('');
   const [filterSpec, setFilterSpec] = useState('');
   const [openMenu, setOpenMenu] = useState<string | null>(null);
-
+const [menuPosition, setMenuPosition] = useState({
+  top: 0,
+  left: 0,
+});
   const [showAddModal, setShowAddModal] = useState(false);
   const [editingDoctor, setEditingDoctor] = useState<DoctorRecord | null>(null);
   const [viewingDoctor, setViewingDoctor] = useState<DoctorRecord | null>(null);
@@ -433,54 +437,97 @@ export function AdminDoctors() {
                   </td>
 
                   <td className="relative px-4 py-3 text-right">
-                    <button
-                      onClick={() =>
-                        setOpenMenu(
-                          openMenu === String(doctor.id)
-                            ? null
-                            : String(doctor.id),
-                        )
-                      }
-                      className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-100 hover:text-navy-700"
-                      aria-label={`Actions for ${doctor.name}`}
-                    >
-                      <MoreVertical className="h-4 w-4" />
-                    </button>
+                    
+<button
+  onClick={(event) => {
+    const doctorId = String(doctor.id);
 
-                    {openMenu === String(doctor.id) && (
-                      <div className="absolute right-4 top-full z-10 mt-1 w-44 rounded-xl border border-navy-100 bg-white py-1 text-left shadow-elevated">
-                        <button
-                          onClick={() => {
-                            setViewingDoctor(doctor);
-                            setOpenMenu(null);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
-                        >
-                          <Eye className="h-4 w-4" />
-                          View
-                        </button>
+    if (openMenu === doctorId) {
+      setOpenMenu(null);
+      return;
+    }
 
-                        <button
-                          onClick={() => openEdit(doctor)}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
-                        >
-                          <Edit2 className="h-4 w-4" />
-                          Edit
-                        </button>
+    const rect = event.currentTarget.getBoundingClientRect();
+    const menuHeight = 176;
+    const menuWidth = 176;
+    const gap = 4;
+    const spaceBelow = window.innerHeight - rect.bottom;
+    const openUp = spaceBelow < menuHeight + gap;
+
+    const top = openUp
+      ? Math.max(8, rect.top - menuHeight - gap)
+      : Math.min(
+          window.innerHeight - menuHeight - 8,
+          rect.bottom + gap
+        );
+
+    const left = Math.max(
+      8,
+      Math.min(
+        rect.right - menuWidth,
+        window.innerWidth - menuWidth - 8
+      )
+    );
+
+    setMenuPosition({ top, left });
+    setOpenMenu(doctorId);
+  }}
+  className="rounded-lg p-1.5 text-navy-400 hover:bg-navy-100 hover:text-navy-700"
+  aria-label={`Actions for ${doctor.name}`}
+>
+  <MoreVertical className="h-4 w-4" />
+</button>
+
+{openMenu === String(doctor.id) &&
+  createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-[999]"
+        onClick={() => setOpenMenu(null)}
+      />
+
+      <div
+        className="fixed w-44 rounded-xl border border-navy-100 bg-white py-1 text-left shadow-elevated z-[1000]"
+        style={{
+          top: menuPosition.top,
+          left: menuPosition.left,
+        }}
+      >
+        <button
+          onClick={() => {
+            setViewingDoctor(doctor);
+            setOpenMenu(null);
+          }}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
+        >
+          <Eye className="h-4 w-4" />
+          View
+        </button>
+
+        <button
+          onClick={() => openEdit(doctor)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-navy-700 hover:bg-navy-50"
+        >
+          <Edit2 className="h-4 w-4" />
+          Edit
+        </button>
 
 
-                        <button
-                          onClick={() => {
-                            setDeleteTarget(doctor);
-                            setOpenMenu(null);
-                          }}
-                          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-error-600 hover:bg-error-50"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Remove
-                        </button>
-                      </div>
-                    )}
+        <button
+          onClick={() => {
+            setDeleteTarget(doctor);
+            setOpenMenu(null);
+          }}
+          className="flex w-full items-center gap-2 px-3 py-2 text-sm text-error-600 hover:bg-error-50"
+        >
+          <Trash2 className="h-4 w-4" />
+          Remove
+        </button>
+      </div>
+    </>,
+    document.body
+  )}
+
                   </td>
                 </tr>
               ))}
