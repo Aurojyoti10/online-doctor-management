@@ -77,10 +77,7 @@ export function PatientAppointments() {
           doctorId: String(row.doctor_id),
           doctorName: row.doctor_name || `Doctor #${row.doctor_id}`,
           doctorSpecialization: row.specialization || 'Medical consultation',
-          date:
-            typeof row.appointment_date === 'string'
-              ? row.appointment_date.slice(0, 10)
-              : new Date(row.appointment_date).toISOString().slice(0, 10),
+          date: String(row.appointment_date).slice(0, 10),
           time: String(row.start_time).slice(0, 5),
           consultationType: 'in-person',
           status: row.status === 'scheduled' ? 'confirmed' : row.status,
@@ -106,10 +103,33 @@ export function PatientAppointments() {
     void loadAppointments();
   }, [loadAppointments, location.key]);
 
-  const filtered = localAppointments.filter((appointment) => {
-    if (activeTab === 'Upcoming') {
-      return ['confirmed', 'pending', 'scheduled'].includes(appointment.status);
-    }
+  
+const isUpcoming = (appointment: Appointment) => {
+  const date = String(appointment.date).slice(0, 10);
+  const time = String(appointment.time).slice(0, 5);
+
+  const [year, month, day] = date.split('-').map(Number);
+  const [hours, minutes] = time.split(':').map(Number);
+
+  const appointmentDateTime = new Date(
+    year,
+    month - 1,
+    day,
+    hours,
+    minutes
+  );
+
+  return (
+    ['confirmed', 'pending', 'scheduled'].includes(appointment.status) &&
+    appointmentDateTime.getTime() > Date.now()
+  );
+};
+
+const filtered = localAppointments.filter((appointment) => {
+  if (activeTab === 'Upcoming') {
+    return isUpcoming(appointment);
+  }
+
 
     if (activeTab === 'Completed') {
       return appointment.status === 'completed';
@@ -181,12 +201,12 @@ export function PatientAppointments() {
             <span className="ml-1 text-xs text-navy-400">
               (
               {localAppointments.filter((appointment) =>
-                tab === 'Upcoming'
-                  ? ['confirmed', 'pending', 'scheduled'].includes(appointment.status)
-                  : tab === 'Completed'
-                    ? appointment.status === 'completed'
-                    : ['cancelled', 'rejected'].includes(appointment.status),
-              ).length}
+  tab === 'Upcoming'
+    ? isUpcoming(appointment)
+    : tab === 'Completed'
+      ? appointment.status === 'completed'
+      : ['cancelled', 'rejected'].includes(appointment.status),
+).length}
               )
             </span>
           </button>
@@ -242,9 +262,6 @@ export function PatientAppointments() {
                 )
               }
               onCancel={() => setCancelTarget(appointment.id)}
-              onRate={() =>
-                showToast('success', 'Thank you!', 'Rating submitted successfully.')
-              }
             />
           ))}
         </div>

@@ -54,15 +54,13 @@ export function AppointmentCard({ appointment, onView, onReschedule, onCancel, o
       >
         Cancel
       </Button>
-    ) : appointment.status === 'completed' ? (
-      <Button
-        size="sm"
-        className="flex-1"
-        onClick={onRate}
-      >
-        Rate
-      </Button>
-    ) : null}
+    ) : appointment.status === 'completed' && variant === 'patient' ? (
+  <div className="w-full py-1 text-center">
+    <p className="text-sm font-medium text-primary-600">
+      💙 Wishing you a speedy recovery!
+    </p>
+  </div>
+) : null}
   </div>
 )}
 </Card>

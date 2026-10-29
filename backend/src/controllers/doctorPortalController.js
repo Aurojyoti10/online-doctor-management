@@ -36,10 +36,10 @@ async function dashboard(req, res) {
     `, [doctorId]);
 
     const [today] = await pool.query(`
-      SELECT a.id, a.patient_id, u.name AS patient_name,
-             a.appointment_date, a.start_time, a.end_time,
-             a.status, a.reason
-      FROM appointments a
+  SELECT a.id, a.patient_id, u.name AS patient_name,
+         DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointment_date,
+         a.start_time, a.end_time, a.status, a.reason
+  FROM appointments a
       JOIN patients p ON p.id = a.patient_id
       JOIN users u ON u.id = p.user_id
       WHERE a.doctor_id = ? AND a.appointment_date = CURDATE()
@@ -47,25 +47,37 @@ async function dashboard(req, res) {
     `, [doctorId]);
 
     const [earnings] = await pool.query(`
-      SELECT COALESCE(SUM(pay.amount), 0) AS today_earnings
-      FROM payments pay
-      JOIN appointments a ON a.id = pay.appointment_id
-      WHERE a.doctor_id = ?
-        AND pay.status = 'completed'
-        AND DATE(pay.created_at) = CURDATE()
-    `, [doctorId]);
+  SELECT COALESCE(SUM(
+    CASE
+      WHEN pay.status = 'completed'
+      THEN pay.amount - COALESCE(pay.refund_amount, 0)
+      ELSE 0
+    END
+  ), 0) AS today_earnings
+  FROM payments pay
+  JOIN appointments a ON a.id = pay.appointment_id
+  WHERE a.doctor_id = ?
+    AND pay.status = 'completed'
+    AND DATE(pay.created_at) = CURDATE()
+`, [doctorId]);
 
     const [weekly] = await pool.query(`
-      SELECT DATE(pay.created_at) AS day,
-             COALESCE(SUM(pay.amount), 0) AS revenue
-      FROM payments pay
-      JOIN appointments a ON a.id = pay.appointment_id
-      WHERE a.doctor_id = ?
-        AND pay.status = 'completed'
-        AND pay.created_at >= CURDATE() - INTERVAL 6 DAY
-      GROUP BY DATE(pay.created_at)
-      ORDER BY day
-    `, [doctorId]);
+  SELECT DATE(pay.created_at) AS day,
+         COALESCE(SUM(
+           CASE
+             WHEN pay.status = 'completed'
+             THEN pay.amount - COALESCE(pay.refund_amount, 0)
+             ELSE 0
+           END
+         ), 0) AS revenue
+  FROM payments pay
+  JOIN appointments a ON a.id = pay.appointment_id
+  WHERE a.doctor_id = ?
+    AND pay.status = 'completed'
+    AND pay.created_at >= CURDATE() - INTERVAL 6 DAY
+  GROUP BY DATE(pay.created_at)
+  ORDER BY day
+`, [doctorId]);
 
     res.json({
       success: true,
@@ -92,8 +104,9 @@ async function appointments(req, res) {
     const [rows] = await pool.query(`
       SELECT a.id, a.patient_id, p.date_of_birth, p.gender,
              u.name AS patient_name, u.email AS patient_email,
-             a.doctor_id, a.appointment_date, a.start_time,
-             a.end_time, a.status, a.reason,
+             a.doctor_id,
+DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointment_date,
+a.start_time, a.end_time, a.status, a.reason,
              d.consultation_fee AS fee
       FROM appointments a
       JOIN patients p ON p.id = a.patient_id
@@ -110,6 +123,7 @@ async function appointments(req, res) {
   }
 }
 
+
 async function updateAppointmentStatus(req, res) {
   const allowed = ['confirmed', 'cancelled', 'completed', 'no_show'];
   const status = req.body.status;
@@ -120,23 +134,65 @@ async function updateAppointmentStatus(req, res) {
 
   try {
     const doctorId = await getDoctorId(req.user.id);
-    if (!doctorId) return fail(res, 404, 'Doctor profile not found');
+    if (!doctorId) {
+      return fail(res, 404, 'Doctor profile not found');
+    }
 
-    const [result] = await pool.query(`
-      UPDATE appointments
-      SET status = ?
-      WHERE id = ? AND doctor_id = ?
-        AND status IN ('scheduled', 'confirmed')
-    `, [status, req.params.id, doctorId]);
+    // Verify the appointment belongs to this doctor.
+    const [appointments] = await pool.query(
+      `SELECT id, appointment_date, end_time
+       FROM appointments
+       WHERE id = ?
+         AND doctor_id = ?
+         AND status IN ('scheduled', 'confirmed')`,
+      [req.params.id, doctorId]
+    );
 
-    if (!result.affectedRows) {
+    if (!appointments.length) {
       return fail(
-        res, 404,
+        res,
+        404,
         'Appointment not found, already completed, or not assigned to you'
       );
     }
 
-    res.json({ success: true, message: 'Appointment status updated' });
+    // An appointment cannot be completed before its scheduled end time.
+    if (status === 'completed') {
+      const [timeCheck] = await pool.query(
+        `SELECT (
+           TIMESTAMP(appointment_date, end_time) <= NOW()
+         ) AS can_complete
+         FROM appointments
+         WHERE id = ? AND doctor_id = ?`,
+        [req.params.id, doctorId]
+      );
+
+      if (!timeCheck.length || !timeCheck[0].can_complete) {
+        return fail(
+          res,
+          400,
+          'This appointment cannot be completed before its scheduled end time'
+        );
+      }
+    }
+
+    const [result] = await pool.query(
+      `UPDATE appointments
+       SET status = ?
+       WHERE id = ?
+         AND doctor_id = ?
+         AND status IN ('scheduled', 'confirmed')`,
+      [status, req.params.id, doctorId]
+    );
+
+    if (!result.affectedRows) {
+      return fail(res, 409, 'Appointment status has already changed');
+    }
+
+    res.json({
+      success: true,
+      message: 'Appointment status updated'
+    });
   } catch (e) {
     console.error('Update doctor appointment:', e);
     fail(res, 500, 'Failed to update appointment');
@@ -435,31 +491,44 @@ async function earnings(req, res) {
     const doctorId = await getDoctorId(req.user.id);
     if (!doctorId) return fail(res, 404, 'Doctor profile not found');
 
-    const [summary] = await pool.query(`
-      SELECT
-        COALESCE(SUM(CASE WHEN pay.status = 'completed'
-          THEN pay.amount ELSE 0 END), 0) AS total_revenue,
-        COUNT(CASE WHEN pay.status = 'completed' THEN 1 END)
-          AS completed_payments,
-        COUNT(CASE WHEN pay.status = 'pending' THEN 1 END)
-          AS pending_payments
-      FROM payments pay
-      JOIN appointments a ON a.id = pay.appointment_id
-      WHERE a.doctor_id = ?
-    `, [doctorId]);
+    
+const [summary] = await pool.query(`
+  SELECT
+    COALESCE(SUM(
+      CASE
+        WHEN pay.status = 'completed'
+        THEN pay.amount - COALESCE(pay.refund_amount, 0)
+        ELSE 0
+      END
+    ), 0) AS total_revenue,
+    COUNT(CASE
+      WHEN pay.status = 'completed' THEN 1
+    END) AS completed_payments,
+    COUNT(CASE
+      WHEN pay.status = 'pending' THEN 1
+    END) AS pending_payments
+  FROM payments pay
+  JOIN appointments a ON a.id = pay.appointment_id
+  WHERE a.doctor_id = ?
+`, [doctorId]);
 
-    const [rows] = await pool.query(`
-      SELECT pay.id, pay.appointment_id, pay.amount,
-             pay.payment_method, pay.status, pay.created_at,
-             puser.name AS patient_name,
-             a.appointment_date
-      FROM payments pay
-      JOIN appointments a ON a.id = pay.appointment_id
-      JOIN patients p ON p.id = a.patient_id
-      JOIN users puser ON puser.id = p.user_id
-      WHERE a.doctor_id = ?
-      ORDER BY pay.created_at DESC
-    `, [doctorId]);
+
+    
+const [rows] = await pool.query(`
+  SELECT pay.id, pay.appointment_id, pay.amount,
+         pay.payment_method, pay.status, pay.created_at,
+         pay.refund_status, pay.refund_amount,
+         pay.refund_reference, pay.refunded_at,
+         puser.name AS patient_name,
+         a.appointment_date
+  FROM payments pay
+  JOIN appointments a ON a.id = pay.appointment_id
+  JOIN patients p ON p.id = a.patient_id
+  JOIN users puser ON puser.id = p.user_id
+  WHERE a.doctor_id = ?
+  ORDER BY pay.created_at DESC
+`, [doctorId]);
+
 
     res.json({
       success: true,

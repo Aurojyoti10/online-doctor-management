@@ -1,5 +1,5 @@
 const pool = require('../config/database');
-
+const crypto = require('crypto');
 
 const getAvailableSlots = async (req, res) => {
   try {
@@ -27,7 +27,7 @@ const getAvailableSlots = async (req, res) => {
    FROM appointments
    WHERE doctor_id = ?
      AND appointment_date = ?
-     AND status <> 'cancelled'`,
+     AND status IN ('scheduled', 'confirmed', 'pending')`,
   [Number(doctor_id), date]
 );
 
@@ -75,7 +75,7 @@ const getAllAppointments = async (req, res) => {
         du.name AS doctor_name,
         d.specialization,
         d.consultation_fee AS fee,
-        a.appointment_date,
+        DATE_FORMAT(a.appointment_date, '%Y-%m-%d') AS appointment_date,
         a.start_time,
         a.end_time,
         a.status,
@@ -331,16 +331,17 @@ const createAppointment = async (req, res) => {
 
     // Scheduled, confirmed AND completed appointments block their time.
     // Only cancelled appointments release their slots.
-    const [conflicts] = await pool.query(
-      `SELECT id
-       FROM appointments
-       WHERE doctor_id = ?
-         AND appointment_date = ?
-         AND status <> 'cancelled'
-         AND start_time < ?
-         AND end_time > ?`,
-      [doctor_id, dateString, end_time, start_time]
-    );
+    // Only active appointments block their time slots.
+const [conflicts] = await pool.query(
+  `SELECT id
+   FROM appointments
+   WHERE doctor_id = ?
+     AND appointment_date = ?
+     AND status IN ('scheduled', 'confirmed', 'pending')
+     AND start_time < ?
+     AND end_time > ?`,
+  [doctor_id, dateString, end_time, start_time]
+);
 
     if (conflicts.length > 0) {
       return res.status(409).json({
@@ -501,36 +502,166 @@ const updateAppointment = async (req, res) => {
 };
 
 
+
 const deleteAppointment = async (req, res) => {
+  let connection;
+
   try {
     const { id } = req.params;
 
-    const [result] = await pool.query(
-      `UPDATE appointments SET status = 'cancelled' WHERE id = ?`,
-      [id]
-    );
-
-    if (result.affectedRows === 0) {
-      return res.status(404).json({
+    if (!/^\d+$/.test(String(id)) || Number(id) < 1) {
+      return res.status(400).json({
         success: false,
-        message: 'Appointment not found'
+        message: 'Invalid appointment ID',
       });
     }
 
-    res.status(200).json({
+    if (!['patient', 'admin'].includes(req.user.role)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only patients or admins can cancel appointments',
+      });
+    }
+
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [appointments] = await connection.query(
+      `SELECT a.id, a.patient_id, a.status,
+              p.user_id AS patient_user_id
+       FROM appointments a
+       JOIN patients p ON p.id = a.patient_id
+       WHERE a.id = ?
+       FOR UPDATE`,
+      [Number(id)]
+    );
+
+    if (!appointments.length) {
+      await connection.rollback();
+      return res.status(404).json({
+        success: false,
+        message: 'Appointment not found',
+      });
+    }
+
+    const appointment = appointments[0];
+
+    if (
+      req.user.role === 'patient' &&
+      Number(appointment.patient_user_id) !== Number(req.user.id)
+    ) {
+      await connection.rollback();
+      return res.status(403).json({
+        success: false,
+        message: 'You can only cancel your own appointments',
+      });
+    }
+
+    if (appointment.status === 'cancelled') {
+      await connection.rollback();
+      return res.status(200).json({
+        success: true,
+        message: 'Appointment is already cancelled',
+        data: {
+          appointment_id: Number(id),
+          status: 'cancelled',
+          refund_status: 'unchanged',
+          refund_amount: 0,
+        },
+      });
+    }
+
+    const [payments] = await connection.query(
+      `SELECT id, amount, status, refund_status
+       FROM payments
+       WHERE appointment_id = ?
+       FOR UPDATE`,
+      [Number(id)]
+    );
+
+    let refundAmount = 0;
+    let refundedPaymentCount = 0;
+
+    for (const payment of payments) {
+      // Only completed payments are eligible for a refund.
+      if (payment.status !== 'completed') {
+        continue;
+      }
+
+      // Never refund a payment twice.
+      if (payment.refund_status === 'completed') {
+        continue;
+      }
+
+      const amount = Number(payment.amount);
+
+      if (!Number.isFinite(amount) || amount <= 0) {
+        throw new Error(`Invalid amount for payment ${payment.id}`);
+      }
+
+      const refundReference =
+        `DEMO-REFUND-${crypto.randomUUID()}`;
+
+      // Simulated refund: no real money is transferred.
+      const [refundResult] = await connection.query(
+        `UPDATE payments
+         SET refund_status = 'completed',
+             refund_amount = amount,
+             refund_reference = ?,
+             refunded_at = CURRENT_TIMESTAMP
+         WHERE id = ?
+           AND status = 'completed'
+           AND refund_status <> 'completed'`,
+        [refundReference, payment.id]
+      );
+
+      if (refundResult.affectedRows === 1) {
+        refundAmount += amount;
+        refundedPaymentCount += 1;
+      }
+    }
+
+    await connection.query(
+      `UPDATE appointments
+       SET status = 'cancelled'
+       WHERE id = ?`,
+      [Number(id)]
+    );
+
+    await connection.commit();
+
+    return res.status(200).json({
       success: true,
-      message: 'Appointment cancelled successfully'
+      message: refundAmount > 0
+        ? 'Appointment cancelled and simulated refund completed'
+        : 'Appointment cancelled successfully; no refund was required',
+      data: {
+        appointment_id: Number(id),
+        status: 'cancelled',
+        refund_status: refundAmount > 0
+          ? 'completed'
+          : 'not_required',
+        refund_amount: Number(refundAmount.toFixed(2)),
+        refunded_payments: refundedPaymentCount,
+        simulated: true,
+      },
     });
-
   } catch (error) {
-    console.error('Error deleting appointment:', error);
+    if (connection) {
+      await connection.rollback().catch(() => {});
+    }
 
-    res.status(500).json({
+    console.error('Cancel appointment error:', error);
+
+    return res.status(500).json({
       success: false,
-      message: 'Failed to delete appointment'
+      message: 'Failed to cancel appointment',
     });
+  } finally {
+    if (connection) connection.release();
   }
 };
+
 
 
 module.exports = {

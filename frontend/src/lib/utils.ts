@@ -9,15 +9,32 @@ export function formatCurrency(amount: number): string {
   return `₹${amount.toLocaleString('en-IN')}`;
 }
 
+
 export function formatDate(date: string): string {
-  const d = new Date(date);
-  return d.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' });
+  const dateStr = String(date).slice(0, 10);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+
+  return d.toLocaleDateString('en-IN', {
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
 }
 
 export function formatDateLong(date: string): string {
-  const d = new Date(date);
-  return d.toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+  const dateStr = String(date).slice(0, 10);
+  const [year, month, day] = dateStr.split('-').map(Number);
+  const d = new Date(year, month - 1, day);
+
+  return d.toLocaleDateString('en-IN', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  });
 }
+
 
 export function formatTime(timestamp: string): string {
   const d = new Date(timestamp);
@@ -45,16 +62,25 @@ export function generateId(prefix: string = 'id'): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
 }
 
+
 export function getDaysFromToday(count: number): string[] {
   const days: string[] = [];
   const today = new Date();
+
   for (let i = 0; i < count; i++) {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    days.push(d.toISOString().split('T')[0]);
+
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+
+    days.push(`${year}-${month}-${day}`);
   }
+
   return days;
 }
+
 
 export function getDayName(dateStr: string, short: boolean = true): string {
   const d = new Date(dateStr);

@@ -571,11 +571,19 @@ export function DoctorPortalPage({ section }: { section: Section }) {
       if (tab === 'Today') return date === today;
 
       if (tab === 'Upcoming') {
-        return (
-          date > today &&
-          ['scheduled', 'confirmed'].includes(status)
-        );
-      }
+  const appointmentTime = String(
+    appointment.start_time ?? appointment.time ?? ''
+  ).slice(0, 8);
+
+  const appointmentDateTime = new Date(
+    `${date}T${appointmentTime.length === 5 ? `${appointmentTime}:00` : appointmentTime}`
+  );
+
+  return (
+    appointmentDateTime.getTime() > Date.now() &&
+    ['scheduled', 'confirmed'].includes(status)
+  );
+}
 
       if (tab === 'Pending') {
         return status === 'scheduled';
@@ -1280,13 +1288,29 @@ export function DoctorPortalPage({ section }: { section: Section }) {
                       </div>
 
                       <div className="text-right">
-                        <p className="font-semibold">
-                          {money(payment.amount)}
-                        </p>
-                        <p className="text-sm capitalize text-navy-500">
-                          {payment.status}
-                        </p>
-                      </div>
+  <p className="font-semibold">
+    {money(payment.amount)}
+  </p>
+
+  <p className="text-sm capitalize text-navy-500">
+    Payment: {payment.status}
+  </p>
+
+  {payment.refund_status &&
+    payment.refund_status !== 'not_required' && (
+      <>
+        <p className="mt-1 text-sm capitalize text-amber-700">
+          Refund: {payment.refund_status}
+        </p>
+
+        {Number(payment.refund_amount) > 0 && (
+          <p className="text-sm text-green-700">
+            Refunded: {money(payment.refund_amount)}
+          </p>
+        )}
+      </>
+    )}
+</div>
                     </div>
                   ))}
                 </div>

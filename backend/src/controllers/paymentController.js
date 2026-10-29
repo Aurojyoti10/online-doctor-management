@@ -140,9 +140,11 @@ const getPayments = async (req, res) => {
   try {
     let query = `
       SELECT pay.id, pay.appointment_id, pay.amount,
-             pay.payment_method, pay.status, pay.transaction_ref,
-             pay.created_at, a.doctor_id, a.appointment_date,
-             a.start_time, u.name AS doctor_name
+       pay.payment_method, pay.status, pay.transaction_ref,
+       pay.refund_status, pay.refund_amount,
+       pay.refund_reference, pay.refunded_at,
+       pay.created_at, a.doctor_id, a.appointment_date,
+       a.start_time, u.name AS doctor_name
       FROM payments pay
       JOIN appointments a ON a.id = pay.appointment_id
       JOIN patients p ON p.id = a.patient_id
