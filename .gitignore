@@ -11,3 +11,9 @@ patient-portal-code.txt
 *.bak
 *.before-cleanup.bak
 *.before-api.bakfrontend/src/pages/BookingPage.backup.tsx
+
+# Local database backup
+online_doctor_management_backup.sql
+
+# Temporary frontend backup
+frontend/src/pages/BookingPage.backup.tsx
